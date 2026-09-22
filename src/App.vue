@@ -1,5 +1,28 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
+import {
+  ORDER_STATUSES,
+  PRODUCTS,
+  SHORTAGE_TOLERANCE_L,
+  canRemove,
+  type StationLike,
+  type UnloadingOrder,
+} from "./unloading/rules";
+import {
+  availableCapacity,
+  bindStations,
+  cancelOrder,
+  completeOrder,
+  hasActiveJob,
+  registerOrder,
+  removeOrder,
+  reviewOrder,
+  startOrder,
+  stationOf,
+  tankOf,
+  tanksOfStation,
+  unloadState,
+} from "./unloading/store";
 
 type Field = {
   key: string;
@@ -119,6 +142,9 @@ function loadRecords(): RecordItem[] {
 }
 
 const records = ref<RecordItem[]>(loadRecords());
+
+// 卸油互锁台绑定站点状态：开工/完工直接读写站点状态与库存摘要，并复用站点持久化
+bindStations(() => records.value as unknown as StationLike[], persist);
 const form = reactive<Record<string, string | number>>(createBlank());
 const note = ref("");
 const filter = ref(project.filters[0]);
@@ -185,6 +211,125 @@ function flow(record: RecordItem) {
 function remove(id: string) {
   records.value = records.value.filter((record) => record.id !== id);
   persist();
+}
+
+/* ---------- 卸油互锁台 ---------- */
+
+const unloadForm = reactive({
+  stationId: "",
+  tankId: "",
+  product: PRODUCTS[0] as string,
+  plannedVolume: 0,
+  slotStart: "",
+  slotEnd: "",
+  escort: "",
+});
+
+const registerFeedback = ref<{ kind: "success" | "waiting" | "rejected"; text: string } | null>(null);
+const actualInputs = reactive<Record<string, number>>({});
+
+const stationTanks = computed(() => tanksOfStation(unloadForm.stationId));
+
+const sortedOrders = computed(() =>
+  [...unloadState.orders].sort((a, b) => b.seq - a.seq)
+);
+
+const statusCounts = computed(() =>
+  ORDER_STATUSES.map((status) => ({
+    status,
+    count: unloadState.orders.filter((order) => order.status === status).length
+  })).filter((row) => row.count > 0)
+);
+
+const lockedStationNames = computed(() => {
+  const names = new Set<string>();
+  for (const order of unloadState.orders) {
+    if (order.status === "待复核") names.add(stationName(order.stationId));
+  }
+  return [...names];
+});
+
+function stationName(id: string) {
+  return stationOf(id)?.station ?? "（站点已删除）";
+}
+
+function tankName(id: string) {
+  return tankOf(id)?.name ?? "（油罐已删除）";
+}
+
+function onStationPick() {
+  unloadForm.tankId = "";
+}
+
+function onTankPick() {
+  const tank = tankOf(unloadForm.tankId);
+  if (tank) unloadForm.product = tank.product;
+}
+
+function submitUnloading() {
+  const { order, reasons } = registerOrder({ ...unloadForm });
+  if (order.status === "已排期") {
+    registerFeedback.value = {
+      kind: "success",
+      text: `已排期：${stationName(order.stationId)} / ${tankName(order.tankId)}，${fmtTime(order.slotStart)} 起卸。`
+    };
+    resetUnloadForm();
+  } else if (order.status === "候单中") {
+    registerFeedback.value = {
+      kind: "waiting",
+      text: `时段重叠，整单不予排期，已转入候单（提交顺序 #${order.seq}），待罐位释放后按序补位。`
+    };
+    resetUnloadForm();
+  } else {
+    registerFeedback.value = {
+      kind: "rejected",
+      text: `整单拒绝：${reasons.join("；")}。原排期、库存与站点状态未变。`
+    };
+  }
+}
+
+function resetUnloadForm() {
+  unloadForm.tankId = "";
+  unloadForm.plannedVolume = 0;
+  unloadForm.slotStart = "";
+  unloadForm.slotEnd = "";
+  unloadForm.escort = "";
+}
+
+function complete(order: UnloadingOrder) {
+  const actual = Number(actualInputs[order.id] ?? order.plannedVolume);
+  completeOrder(order.id, actual);
+}
+
+function fmtTime(iso: string) {
+  const time = Date.parse(iso);
+  if (Number.isNaN(time)) return iso || "-";
+  return new Date(time).toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function diffText(order: UnloadingOrder) {
+  if (order.actualVolume === null) return "—";
+  const diff = order.actualVolume - order.plannedVolume;
+  return `${diff > 0 ? "+" : ""}${diff}L`;
+}
+
+const STATUS_CLASS: Record<string, string> = {
+  已排期: "st-booked",
+  候单中: "st-waiting",
+  卸油中: "st-active",
+  待复核: "st-review",
+  已完工: "st-done",
+  已取消: "st-closed",
+  已拒绝: "st-closed"
+};
+
+function statusClass(status: string) {
+  return STATUS_CLASS[status] ?? "";
 }
 </script>
 
@@ -262,6 +407,132 @@ function remove(id: string) {
               <div class="bar-track"><div class="bar-fill" :style="{ width: `${(row.value / maxChart) * 100}%` }" /></div>
               <strong>{{ row.value }}</strong>
             </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="workspace unload-section">
+        <form class="panel" @submit.prevent="submitUnloading">
+          <h2>卸油互锁台 · 登记卸油单</h2>
+          <div class="form-grid">
+            <label>
+              油站
+              <select v-model="unloadForm.stationId" required @change="onStationPick">
+                <option value="">请选择</option>
+                <option v-for="item in records" :key="item.id" :value="item.id">
+                  {{ item.station }}（{{ item.status }}）
+                </option>
+              </select>
+            </label>
+            <label>
+              油罐
+              <select v-model="unloadForm.tankId" required @change="onTankPick">
+                <option value="">请选择</option>
+                <option v-for="tank in stationTanks" :key="tank.id" :value="tank.id">
+                  {{ tank.name }} · {{ tank.product }} · 余量 {{ availableCapacity(tank) }}L
+                </option>
+              </select>
+            </label>
+            <p v-if="unloadForm.stationId && stationTanks.length === 0" class="hint">该站暂无油罐，无法登记卸油。</p>
+            <label>
+              油品
+              <select v-model="unloadForm.product" required>
+                <option v-for="item in PRODUCTS" :key="item">{{ item }}</option>
+              </select>
+            </label>
+            <label>
+              来油体积L
+              <input v-model.number="unloadForm.plannedVolume" type="number" min="1" required />
+            </label>
+            <label>
+              计划开始
+              <input v-model="unloadForm.slotStart" type="datetime-local" required />
+            </label>
+            <label>
+              计划结束
+              <input v-model="unloadForm.slotEnd" type="datetime-local" required />
+            </label>
+            <label>
+              押运员
+              <input v-model="unloadForm.escort" placeholder="姓名 / 联系方式" required />
+            </label>
+            <button type="submit">登记卸油单</button>
+            <p v-if="registerFeedback" class="alert" :class="registerFeedback.kind">{{ registerFeedback.text }}</p>
+          </div>
+        </form>
+
+        <section class="list-panel">
+          <div class="toolbar">
+            <h2>卸油单与油罐库存</h2>
+            <div class="chips">
+              <span v-for="row in statusCounts" :key="row.status" class="chip">{{ row.status }} {{ row.count }}</span>
+            </div>
+          </div>
+
+          <p v-if="lockedStationNames.length" class="banner">
+            待复核锁定：{{ lockedStationNames.join("、") }} 存在短溢超 {{ SHORTAGE_TOLERANCE_L }}L 待复核单，复核归档前不得再排新单。
+          </p>
+
+          <table class="tank-table">
+            <thead>
+              <tr><th>油站 / 油罐</th><th>油品</th><th>库存 / 罐容</th><th>可卸余量</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="tank in unloadState.tanks" :key="tank.id">
+                <td>{{ stationName(tank.stationId) }} · {{ tank.name }}</td>
+                <td>{{ tank.product }}</td>
+                <td>{{ tank.stock }} / {{ tank.capacity }}L</td>
+                <td>{{ availableCapacity(tank) }}L</td>
+              </tr>
+              <tr v-if="unloadState.tanks.length === 0"><td colspan="4" class="empty">暂无油罐</td></tr>
+            </tbody>
+          </table>
+
+          <div class="record-grid">
+            <div v-if="sortedOrders.length === 0" class="empty">暂无卸油单</div>
+            <article v-for="order in sortedOrders" :key="order.id" class="record">
+              <div class="record-head">
+                <p class="record-title">{{ stationName(order.stationId) }} / {{ tankName(order.tankId) }} · {{ order.product }}</p>
+                <span class="status" :class="statusClass(order.status)">{{ order.status }}</span>
+              </div>
+              <div class="details">
+                <span>来油体积: {{ order.plannedVolume }}L</span>
+                <span>实收体积: {{ order.actualVolume === null ? "—" : `${order.actualVolume}L` }}</span>
+                <span>计划时段: {{ fmtTime(order.slotStart) }} ~ {{ fmtTime(order.slotEnd) }}</span>
+                <span>押运员: {{ order.escort }}</span>
+                <span>提交顺序: #{{ order.seq }}</span>
+                <span v-if="order.actualVolume !== null">短溢: {{ diffText(order) }}</span>
+              </div>
+              <p v-if="order.reasons.length" class="note">{{ order.reasons.join("；") }}</p>
+              <div class="actions">
+                <template v-if="order.status === '已排期'">
+                  <button
+                    type="button"
+                    :disabled="hasActiveJob(unloadState.orders, order.stationId)"
+                    :title="hasActiveJob(unloadState.orders, order.stationId) ? '站点已有卸油作业进行中' : ''"
+                    @click="startOrder(order.id)"
+                  >开工</button>
+                  <button class="secondary" type="button" @click="cancelOrder(order.id)">取消</button>
+                </template>
+                <template v-else-if="order.status === '候单中'">
+                  <button class="secondary" type="button" @click="cancelOrder(order.id)">取消候单</button>
+                </template>
+                <template v-else-if="order.status === '卸油中'">
+                  <input
+                    v-model.number="actualInputs[order.id]"
+                    class="actual-input"
+                    type="number"
+                    min="0"
+                    :placeholder="`实收体积L（计划 ${order.plannedVolume}）`"
+                  />
+                  <button type="button" @click="complete(order)">完工入库</button>
+                </template>
+                <template v-else-if="order.status === '待复核'">
+                  <button type="button" @click="reviewOrder(order.id)">复核归档</button>
+                </template>
+                <button v-if="canRemove(order)" class="danger" type="button" @click="removeOrder(order.id)">删除</button>
+              </div>
+            </article>
           </div>
         </section>
       </section>

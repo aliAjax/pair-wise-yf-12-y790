@@ -251,6 +251,83 @@ textarea {
   padding: 32px 12px;
 }
 
+/* 卸油互锁台 */
+.unload-section {
+  margin-top: 18px;
+  align-items: start;
+}
+
+.hint {
+  margin: 0;
+  color: #8a5a00;
+  font-size: 13px;
+}
+
+.alert {
+  margin: 0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.alert.success { background: #e8f4ef; color: #14724f; }
+.alert.waiting { background: #fdf3e3; color: #8a5a00; }
+.alert.rejected { background: #fdeceb; color: #a63a2e; }
+
+.banner {
+  margin: 0 0 14px;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fdf3e3;
+  color: #8a5a00;
+  font-size: 14px;
+}
+
+.chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #445069;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.tank-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.tank-table th, .tank-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e7edf4;
+  color: #536078;
+}
+
+.tank-table th {
+  color: #445069;
+  font-weight: 700;
+}
+
+.status.st-booked { background: #e8f0fe; color: #1a56c4; }
+.status.st-waiting { background: #fdf3e3; color: #8a5a00; }
+.status.st-active { background: #e7f0fb; color: #176b87; }
+.status.st-review { background: #fdeceb; color: #a63a2e; }
+.status.st-done { background: #e8f4ef; color: #14724f; }
+.status.st-closed { background: #eef0f4; color: #69758c; }
+
+.actual-input {
+  max-width: 180px;
+}
+
 @media (max-width: 860px) {
   .app { padding: 18px; }
   .topbar, .workspace { grid-template-columns: 1fr; }
