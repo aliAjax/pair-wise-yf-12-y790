@@ -83,7 +83,7 @@ h1 {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 18px;
 }
@@ -251,10 +251,154 @@ textarea {
   padding: 32px 12px;
 }
 
+/* 卸油互锁台：站点油罐看板与状态色 */
+.stations {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.station-card {
+  background: #fff;
+  border: 1px solid #dfe7f1;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.station-meta {
+  margin: 4px 0 0;
+  color: #69758c;
+  font-size: 13px;
+}
+
+.station-controls {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.inline-select {
+  font-size: 12px;
+  color: #69758c;
+  gap: 4px;
+}
+
+.inline-select select {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.tank-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.tank-row {
+  border: 1px solid #e4eaf3;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fbfcfe;
+  display: grid;
+  gap: 8px;
+}
+
+.tank-info {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.tank-product {
+  color: #176b87;
+  font-weight: 700;
+}
+
+.tank-stock {
+  color: #69758c;
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.tank-bar {
+  height: 8px;
+}
+
+.tank-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mini-badge {
+  font-size: 11px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #e8eef5;
+  color: #445069;
+  white-space: nowrap;
+}
+
+.status-wait { background: #fff4e0; color: #b26a00; }
+.status-scheduled { background: #e7f0ff; color: #2257b3; }
+.status-working { background: #e8f4ef; color: #14724f; }
+.status-review { background: #fde8e8; color: #b3261e; }
+.status-done { background: #eef2f7; color: #445069; }
+.status-off { background: #f1f1f1; color: #8a8f99; }
+
+.station-open { background: #e8f4ef; color: #14724f; }
+.station-paused { background: #fde8e8; color: #b3261e; }
+.station-tight { background: #fff4e0; color: #b26a00; }
+
+.banner {
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.banner ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.banner-ok { background: #e8f4ef; color: #14724f; }
+.banner-wait { background: #fff4e0; color: #8a5400; }
+.banner-reject,
+.banner-review { background: #fde8e8; color: #b3261e; }
+.banner-info { background: #e8eef5; color: #445069; }
+
+.inline-action {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.inline-action label {
+  flex: 1 1 160px;
+}
+
+.inline-action input {
+  max-width: 200px;
+}
+
+.details em {
+  font-style: normal;
+  font-weight: 700;
+  color: #b3261e;
+}
+
 @media (max-width: 860px) {
   .app { padding: 18px; }
   .topbar, .workspace { grid-template-columns: 1fr; }
   .stack { justify-content: flex-start; }
-  .metrics { grid-template-columns: 1fr; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stations { grid-template-columns: 1fr; }
   .details { grid-template-columns: 1fr; }
 }
